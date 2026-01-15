@@ -1,0 +1,23 @@
+# Credentials - NEVER commit this!
+credentials.txt
+
+# Telegram state
+.telegram_offset
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
