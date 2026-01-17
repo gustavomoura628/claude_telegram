@@ -5,6 +5,20 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 POLL_SCRIPT="$SCRIPT_DIR/poll_messages.py"
+CREDS_FILE="$SCRIPT_DIR/credentials.txt"
+
+# Load credentials
+if [ -f "$CREDS_FILE" ]; then
+    BOT_TOKEN=$(grep "^BOT_TOKEN=" "$CREDS_FILE" | cut -d'=' -f2)
+    CHAT_ID=$(grep "^CHAT_ID=" "$CREDS_FILE" | cut -d'=' -f2)
+fi
+
+send_thinking_message() {
+    curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -d "chat_id=${CHAT_ID}" \
+        -d "text=Message received. Claude is thinking... 🧠" \
+        -d "parse_mode=HTML" > /dev/null 2>&1
+}
 
 echo "Starting Telegram daemon..."
 echo "Claude Code will wake up when messages arrive."
@@ -26,6 +40,8 @@ while true; do
     if [ -n "$message" ]; then
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "Message received: $message"
+        echo "Sending thinking notification..."
+        send_thinking_message
         echo "Waking up Claude Code..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 

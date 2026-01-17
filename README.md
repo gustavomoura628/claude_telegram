@@ -6,27 +6,47 @@ Chat with Claude Code from your phone via Telegram - with **zero token cost whil
 
 A daemon that lets you message Claude Code from Telegram. When you're not chatting, Claude isn't running at all (zero tokens). When a message arrives, it wakes up with full context, responds, and goes back to sleep.
 
+**This isn't a dumbed-down chatbot.** When Claude wakes up, it has full Claude Code capabilities - read files, write files, run commands, use MCP tools. You can manage your computer from your phone.
+
+## Two Modes
+
+### Polling Mode (Simple)
 ```
 ┌─────────────────────────────────────────────────────┐
-│  telegram_daemon.sh (always running, tiny process)  │
+│  telegram_daemon.sh (bash loop)                     │
 │                                                     │
 │  while true:                                        │
-│    poll Telegram      ← sleeps here, zero tokens   │
+│    poll Telegram every ~5 sec                       │
 │    if message:                                      │
-│      claude --continue --print                     │
-│      ↑ wakes up, full context, does its thing      │
-│    back to sleep                                    │
+│      send "thinking..." instantly                   │
+│      claude --continue --print                      │
+│    back to polling                                  │
 │  done                                               │
 └─────────────────────────────────────────────────────┘
 ```
+- No external dependencies
+- ~5 second max delay between sending and receiving
 
-**This isn't a dumbed-down chatbot.** When Claude wakes up, it has full Claude Code capabilities - read files, write files, run commands, use MCP tools. You can manage your computer from your phone.
+### Webhook Mode (Instant)
+```
+┌──────────────────────────────────────────────────────┐
+│  Telegram → ngrok → webhook_server.py                │
+│                         │                            │
+│                         ├─→ Instantly: "Thinking..." │
+│                         └─→ claude --continue        │
+└──────────────────────────────────────────────────────┘
+```
+- Instant message delivery
+- Requires ngrok (or similar tunnel)
+
+Both modes send an immediate "Claude is thinking..." message so you know your message was received.
 
 ## Prerequisites
 
 - [Claude Code](https://claude.ai/code) installed and authenticated
 - Python 3.7+
-- `httpx` Python package (`pip install httpx`)
+- `pip install -r requirements.txt`
+- (For webhook mode) [ngrok](https://ngrok.com/) or similar tunnel
 
 ## Setup
 
@@ -80,7 +100,7 @@ Replace with your actual bot token and chat ID.
 
 ### Step 4: Configure Claude Code MCP
 
-Add the Telegram MCP server to your Claude Code config. Edit `~/.claude/claude_desktop_config.json` (or your Claude Code settings):
+Add the Telegram MCP server to your Claude Code config. Edit `~/.claude.json` (or your Claude Code settings):
 
 ```json
 {
@@ -110,34 +130,46 @@ Have a brief conversation so Claude knows about the project and has context. Som
 
 Once Claude successfully sends a Telegram message, exit the session. This creates the conversation context that `--continue` will use.
 
-## Running the Daemon
+## Running
+
+Use the launcher script:
 
 ```bash
-./telegram_daemon.sh
+./start.sh              # Interactive mode selector
+./start.sh poll         # Polling mode (simple, ~5 sec delay)
+./start.sh webhook      # Webhook mode (instant, auto-detects ngrok)
 ```
 
-That's it! The daemon will poll for messages. When you send something via Telegram:
-1. The daemon detects it
-2. Launches `claude --continue --print --dangerously-skip-permissions`
-3. Claude wakes up, sees your message, responds
-4. Claude auto-exits, daemon goes back to polling
+### Polling Mode
+```bash
+./start.sh poll
+```
+That's it! The daemon will poll for messages.
 
-### Keeping It Running
+### Webhook Mode
+```bash
+# Terminal 1: Start ngrok
+ngrok http 5000
 
-The daemon stops if your computer sleeps or you close the terminal. Options:
-
-- **Prevent sleep**: Use `caffeinate` (macOS) or disable sleep in settings
-- **Run in tmux/screen**: `tmux new -s telegram-claude` then run the daemon
-- **Run on a server**: Deploy to a VPS or Raspberry Pi that stays on
+# Terminal 2: Start the daemon
+./start.sh webhook
+```
+The script auto-detects your ngrok URL. You can also specify it manually:
+```bash
+./start.sh webhook https://xxxx.ngrok.io
+```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `server.py` | MCP server with `send_message` and `get_messages` tools |
-| `poll_messages.py` | Long-polls Telegram API for new messages |
-| `telegram_daemon.sh` | Main daemon loop - polls and wakes Claude |
-| `credentials.txt` | Your bot token and chat ID (don't commit this!) |
+| `telegram_daemon.sh` | Polling mode daemon |
+| `webhook_server.py` | Webhook mode server |
+| `poll_messages.py` | Long-polls Telegram API (used by polling daemon) |
+| `set_webhook.py` | Utility to set/remove Telegram webhook |
+| `start.sh` | Launcher script to choose mode |
+| `credentials.txt` | Your bot token and chat ID (don't commit!) |
 
 ## Security Notes
 
@@ -153,7 +185,7 @@ The magic is in combining three Claude Code features:
 2. **`--continue`**: Preserves conversation context between invocations
 3. **`--print`**: Non-interactive mode that auto-exits after responding
 
-The daemon is just a bash script that polls Telegram and pipes messages to Claude. Claude does all the thinking.
+The daemon (polling or webhook) just waits for messages and pipes them to Claude. Claude does all the thinking.
 
 ## License
 
