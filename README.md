@@ -12,29 +12,30 @@ A daemon that lets you message Claude Code from Telegram. When you're not chatti
 
 ### Polling Mode (Simple)
 ```
-┌─────────────────────────────────────────────────────┐
-│  telegram_daemon.sh (bash loop)                     │
-│                                                     │
-│  while true:                                        │
-│    poll Telegram every ~5 sec                       │
-│    if message:                                      │
-│      send "thinking..." instantly                   │
-│      claude --continue --print                      │
-│    back to polling                                  │
-│  done                                               │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  telegram_daemon.sh (bash loop)                                     │
+│                                                                     │
+│  while true:                                                        │
+│    poll Telegram every ~5 sec                                       │
+│    if message:                                                      │
+│      send "thinking..." instantly                                   │
+│      claude --dangerously-skip-permissions --continue --print       │
+│    back to polling                                                  │
+│  done                                                               │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 - No external dependencies
 - ~5 second max delay between sending and receiving
 
 ### Webhook Mode (Instant)
 ```
-┌──────────────────────────────────────────────────────┐
-│  Telegram → ngrok → webhook_server.py                │
-│                         │                            │
-│                         ├─→ Instantly: "Thinking..." │
-│                         └─→ claude --continue        │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Telegram → ngrok → webhook_server.py                               │
+│                         │                                           │
+│                         ├─→ Instantly: "Thinking..."                │
+│                         └─→ claude --dangerously-skip-permissions   │
+│                              --continue --print                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 - Instant message delivery
 - Requires ngrok (or similar tunnel)
@@ -179,13 +180,16 @@ The script auto-detects your ngrok URL. You can also specify it manually:
 
 ## How It Works
 
-The magic is in combining three Claude Code features:
+The magic is in combining four Claude Code features:
 
 1. **MCP Tools**: Let Claude interact with external services (Telegram)
-2. **`--continue`**: Preserves conversation context between invocations
-3. **`--print`**: Non-interactive mode that auto-exits after responding
+2. **`--dangerously-skip-permissions`**: Allows Claude to run without permission prompts
+3. **`--continue`**: Preserves conversation context between invocations
+4. **`--print`**: Non-interactive mode that auto-exits after responding
 
 The daemon (polling or webhook) just waits for messages and pipes them to Claude. Claude does all the thinking.
+
+⚠️ **Note**: The `--dangerously-skip-permissions` flag means Claude can do *anything* you can do on your computer - read files, write files, run commands, delete things, etc. This is powerful but comes with real risk. Only run this on machines you trust and keep your bot token secret.
 
 ## License
 
