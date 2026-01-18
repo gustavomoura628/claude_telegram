@@ -8,12 +8,58 @@ import sys
 import json
 import subprocess
 import threading
+import time
+from datetime import datetime
 import httpx
 from flask import Flask, request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDS_FILE = os.path.join(SCRIPT_DIR, "credentials.txt")
 OFFSET_FILE = os.path.join(SCRIPT_DIR, ".telegram_offset")
+LAST_MSG_TIME_FILE = os.path.join(SCRIPT_DIR, ".telegram_last_msg_time")
+
+
+def format_time_delta(seconds):
+    """Convert seconds to human-readable time delta string."""
+    if seconds < 0:
+        return "0s"
+
+    days = int(seconds // 86400)
+    hours = int((seconds % 86400) // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if secs > 0 or not parts:
+        parts.append(f"{secs}s")
+
+    return " ".join(parts)
+
+
+def format_timestamp(timestamp):
+    """Convert Unix timestamp to readable datetime string."""
+    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def load_last_msg_time():
+    if os.path.exists(LAST_MSG_TIME_FILE):
+        with open(LAST_MSG_TIME_FILE) as f:
+            try:
+                return int(f.read().strip())
+            except:
+                return None
+    return None
+
+
+def save_last_msg_time(timestamp):
+    with open(LAST_MSG_TIME_FILE, "w") as f:
+        f.write(str(timestamp))
 
 app = Flask(__name__)
 
@@ -53,11 +99,11 @@ def save_offset(offset):
     with open(OFFSET_FILE, "w") as f:
         f.write(str(offset))
 
-def wake_claude(message_text, sender):
+def wake_claude(message_text, sender, time_info):
     """Wake up Claude Code to handle the message"""
     prompt = f"""TELEGRAM MESSAGE ARRIVED:
 
-[{sender}]: {message_text}
+[{sender}] ({time_info}): {message_text}
 
 Please read this message, respond appropriately via the Telegram MCP tool (send_message), and then exit with /exit so I can go back to sleep and wait for the next message."""
 
@@ -83,6 +129,7 @@ def webhook():
     text = message.get("text", "")
     sender = message.get("from", {}).get("first_name", "Unknown")
     update_id = data.get("update_id", 0)
+    msg_timestamp = message.get("date", 0)
 
     # Only process messages from the configured chat
     if chat_id != CHAT_ID:
@@ -91,16 +138,31 @@ def webhook():
     if not text:
         return "OK", 200
 
-    # Save offset to avoid reprocessing
+    # Calculate time info
+    time_str = format_timestamp(msg_timestamp)
+    last_msg_time = load_last_msg_time()
+    if last_msg_time is not None:
+        delta = msg_timestamp - last_msg_time
+        delta_str = format_time_delta(delta)
+        time_info = f"{time_str}, {delta_str} since last msg"
+    else:
+        time_info = f"{time_str}, first msg"
+
+    # Save offset and last message time
     save_offset(update_id)
+    save_last_msg_time(msg_timestamp)
 
-    print(f"Message from {sender}: {text}")
+    print(f"[{sender}] ({time_info}): {text}")
 
-    # Immediately acknowledge - Claude is waking up
-    send_telegram_message("Message received. Claude is thinking... 🧠")
+    # Immediately acknowledge with time delta
+    if last_msg_time is not None:
+        thinking_msg = f"Message received ({delta_str} since last). Claude is thinking... 🧠"
+    else:
+        thinking_msg = "Message received. Claude is thinking... 🧠"
+    send_telegram_message(thinking_msg)
 
     # Wake up Claude in a separate thread so we can return 200 quickly
-    thread = threading.Thread(target=wake_claude, args=(text, sender))
+    thread = threading.Thread(target=wake_claude, args=(text, sender, time_info))
     thread.start()
 
     return "OK", 200

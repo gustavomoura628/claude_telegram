@@ -14,10 +14,29 @@ if [ -f "$CREDS_FILE" ]; then
 fi
 
 send_thinking_message() {
+    local delta="$1"
+    local text
+    if [ -n "$delta" ] && [ "$delta" != "first msg" ]; then
+        text="Message received ($delta since last). Claude is thinking... 🧠"
+    else
+        text="Message received. Claude is thinking... 🧠"
+    fi
     curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
         -d "chat_id=${CHAT_ID}" \
-        -d "text=Message received. Claude is thinking... 🧠" \
+        -d "text=$text" \
         -d "parse_mode=HTML" > /dev/null 2>&1
+}
+
+extract_time_delta() {
+    # Extract the time delta from message format: [Name] (timestamp, DELTA since last msg): text
+    # or [Name] (timestamp, first msg): text
+    local msg="$1"
+    if echo "$msg" | grep -q "first msg"; then
+        echo "first msg"
+    else
+        # Extract between ", " and " since last msg"
+        echo "$msg" | sed -n 's/.*(\([^,]*\), \([^)]*\) since last msg).*/\2/p' | head -1
+    fi
 }
 
 echo "Starting Telegram daemon..."
@@ -41,7 +60,8 @@ while true; do
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo "Message received: $message"
         echo "Sending thinking notification..."
-        send_thinking_message
+        time_delta=$(extract_time_delta "$message")
+        send_thinking_message "$time_delta"
         echo "Waking up Claude Code..."
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 

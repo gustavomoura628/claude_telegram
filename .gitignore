@@ -3,6 +3,7 @@ credentials.txt
 
 # Telegram state
 .telegram_offset
+.telegram_last_msg_time
 
 # Python
 __pycache__/
