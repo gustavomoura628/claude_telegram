@@ -105,7 +105,8 @@ def wake_claude(message_text, sender, time_info):
 
 [{sender}] ({time_info}): {message_text}
 
-Please read this message, respond appropriately via the Telegram MCP tool (send_message), and then exit with /exit so I can go back to sleep and wait for the next message."""
+Please read this message and respond appropriately via the Telegram MCP tool (send_message)."""
+
 
     # Run Claude in a subprocess
     subprocess.run(
